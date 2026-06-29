@@ -1,60 +1,40 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
-import Paper from '@mui/material/Paper';
-import Table from '@mui/material/Table';
-import TableHead from '@mui/material/TableHead';
-import TableBody from '@mui/material/TableBody';
-import TableRow from '@mui/material/TableRow';
-import TableCell from '@mui/material/TableCell';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
-import Dialog from '@mui/material/Dialog';
-import DialogTitle from '@mui/material/DialogTitle';
-import DialogContent from '@mui/material/DialogContent';
-import DialogContentText from '@mui/material/DialogContentText';
-import DialogActions from '@mui/material/DialogActions';
+import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
+import Divider from '@mui/material/Divider';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { getDashboard, deleteRecord } from '../api/dashboard';
 import { ApiError } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 
-function normalizeRecords(data) {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.records)) return data.records;
-  if (Array.isArray(data?.items)) return data.items;
-  return [];
-}
-
-function recordId(record, index) {
-  const idKey = Object.keys(record).find((key) => key.toLowerCase() === 'id');
-  return idKey ? record[idKey] : index;
-}
-
 export default function DashboardPage() {
   const { notifyUnauthorized } = useAuth();
-  const [records, setRecords] = useState([]);
+  const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const [deleting, setDeleting] = useState(false);
 
-  const columns = useMemo(() => {
-    if (records.length === 0) return [];
-    return Object.keys(records[0]);
-  }, [records]);
+  const [recordId, setRecordId] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteResult, setDeleteResult] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await getDashboard();
-      setRecords(normalizeRecords(data));
+      setDashboard(data);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         notifyUnauthorized();
@@ -70,26 +50,29 @@ export default function DashboardPage() {
     loadDashboard();
   }, [loadDashboard]);
 
-  const handleConfirmDelete = async () => {
-    if (pendingDelete === null) return;
+  const handleDelete = async () => {
+    if (!recordId) return;
     setDeleting(true);
+    setDeleteResult(null);
+    setDeleteError(null);
     try {
-      await deleteRecord(pendingDelete.id);
-      setRecords((prev) => prev.filter((record, index) => recordId(record, index) !== pendingDelete.id));
-      setPendingDelete(null);
+      const result = await deleteRecord(recordId);
+      setDeleteResult(result?.message || 'Record deleted.');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         notifyUnauthorized();
         return;
       }
-      setError(err.message || 'Failed to delete record.');
+      setDeleteError(err.message || 'Failed to delete record.');
     } finally {
       setDeleting(false);
     }
   };
 
+  const isAdmin = dashboard?.role === 'Admin';
+
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="sm" sx={{ py: 4 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
           <Typography variant="overline" color="text.secondary">
@@ -112,69 +95,70 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      <Paper variant="outlined">
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-            <CircularProgress />
-          </Box>
-        ) : records.length === 0 ? (
-          <Box sx={{ py: 6, textAlign: 'center' }}>
-            <Typography color="text.secondary">No records found.</Typography>
-          </Box>
-        ) : (
-          <Table>
-            <TableHead>
-              <TableRow>
-                {columns.map((column) => (
-                  <TableCell key={column}>{column}</TableCell>
-                ))}
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {records.map((record, index) => {
-                const id = recordId(record, index);
-                return (
-                  <TableRow key={id} hover>
-                    {columns.map((column) => (
-                      <TableCell key={column}>{String(record[column])}</TableCell>
-                    ))}
-                    <TableCell align="right">
-                      <Tooltip title="Delete record">
-                        <IconButton
-                          color="error"
-                          onClick={() => setPendingDelete({ id })}
-                          size="small"
-                        >
-                          <DeleteOutlineIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </Paper>
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+          <CircularProgress />
+        </Box>
+      ) : dashboard ? (
+        <Card variant="outlined">
+          <CardContent sx={{ p: 3 }}>
+            <Typography variant="body1" sx={{ mb: 2 }}>
+              {dashboard.message}
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography color="text.secondary">Identity</Typography>
+                <Typography>{dashboard.identity}</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography color="text.secondary">Role</Typography>
+                <Chip
+                  label={dashboard.role}
+                  color={isAdmin ? 'primary' : 'default'}
+                  size="small"
+                />
+              </Box>
+            </Box>
 
-      <Dialog open={pendingDelete !== null} onClose={() => setPendingDelete(null)}>
-        <DialogTitle>Delete record</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete record &ldquo;{pendingDelete?.id}&rdquo;? This action
-            cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPendingDelete(null)} disabled={deleting}>
-            Cancel
-          </Button>
-          <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={deleting}>
-            {deleting ? 'Deleting…' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+            {isAdmin && (
+              <>
+                <Divider sx={{ my: 3 }} />
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                  Admin: delete a record
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <TextField
+                    label="Record ID"
+                    size="small"
+                    value={recordId}
+                    onChange={(e) => setRecordId(e.target.value)}
+                    type="number"
+                  />
+                  <Button
+                    variant="contained"
+                    color="error"
+                    startIcon={<DeleteOutlineIcon />}
+                    onClick={handleDelete}
+                    disabled={deleting || !recordId}
+                  >
+                    {deleting ? 'Deleting…' : 'Delete'}
+                  </Button>
+                </Box>
+                {deleteResult && (
+                  <Alert severity="success" sx={{ mt: 2 }}>
+                    {deleteResult}
+                  </Alert>
+                )}
+                {deleteError && (
+                  <Alert severity="error" sx={{ mt: 2 }}>
+                    {deleteError}
+                  </Alert>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
     </Container>
   );
 }

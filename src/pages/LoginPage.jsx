@@ -17,7 +17,7 @@ export default function LoginPage() {
   const location = useLocation();
   const redirectTo = location.state?.from?.pathname || '/dashboard';
 
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -27,7 +27,7 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(username, password);
+      await login(email, password);
       navigate(redirectTo, { replace: true });
     } catch (err) {
       setError(err.message || 'Login failed. Check your credentials and try again.');
@@ -63,12 +63,13 @@ export default function LoginPage() {
 
           <Box component="form" onSubmit={handleSubmit} noValidate>
             <TextField
-              label="Username"
+              label="Email"
+              type="email"
               fullWidth
               autoFocus
               margin="normal"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
             />
             <TextField
